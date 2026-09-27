@@ -227,6 +227,7 @@ then deploy again.
 | `Missing secrets in the 'production' environment` | A secret is missing, or the job isn't using the `production` environment |
 | `Could not resolve hostname` / `SSH_HOST cannot be resolved` | `SSH_HOST` must be only the server's **public IP** (or a public DNS name). Don't use `user@`, a port, a local SSH alias, or a hosts-file name |
 | `Host key verification failed` | `SSH_KNOWN_HOSTS` doesn't match the server (reinstalled server, wrong port). Run `ssh-keyscan` again |
+| `Load key …: error in libcrypto` | `SSH_PRIVATE_KEY` isn't a usable private key. Paste the whole private key file (not the `.pub`), including the `BEGIN`/`END` lines, with no passphrase and not in PuTTY `.ppk` format. The workflow now says which of these it is |
 | `Permission denied (publickey)` | Wrong `SSH_USER`, or the public key isn't in `/home/deploy/.ssh/authorized_keys` |
 | `permission denied … docker.sock` | The deploy user isn't in the `docker` group. Run `usermod -aG docker deploy`, then reconnect |
 | `denied` while pulling the image | The image couldn't be pulled. The workflow logs in to GHCR with its own token; if you pull by hand, run `docker login ghcr.io` first or make the package public |

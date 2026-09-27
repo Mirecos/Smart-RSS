@@ -142,19 +142,54 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
+          fail() { echo "::error::$*"; exit 1; }
           install -m 700 -d ~/.ssh
-          # tr -d '\r': keys and host lists pasted from Windows may carry CRLF line endings.
-          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+
+          # Keys pasted from Windows may carry CRLF line endings.
+          key="$(printf '%s' "$SSH_PRIVATE_KEY" | tr -d '\r')"
+          case "$key" in
+            *PuTTY-User-Key-File*)
+              fail "SSH_PRIVATE_KEY is a PuTTY (.ppk) key. Export it in OpenSSH format (PuTTYgen > Conversions > Export OpenSSH key), or create a key with ssh-keygen (see README)" ;;
+            ssh-ed25519\ *|ssh-rsa\ *|ecdsa-sha2-*|sk-*)
+              fail "SSH_PRIVATE_KEY contains the PUBLIC key (.pub). Paste the private key file (the one WITHOUT .pub) instead" ;;
+            *-----BEGIN*PRIVATE\ KEY-----*-----END*PRIVATE\ KEY-----*) ;;
+            *)
+              fail "SSH_PRIVATE_KEY must be the whole private key file, including the '-----BEGIN ... PRIVATE KEY-----' and '-----END ... PRIVATE KEY-----' lines" ;;
+          esac
+
+          # Repair keys whose line breaks were turned into spaces when pasting.
+          if [ "$(printf '%s\n' "$key" | wc -l)" -le 2 ]; then
+            begin="$(grep -o -- '-----BEGIN [A-Z ]*PRIVATE KEY-----' <<<"$key")"
+            end="${begin/BEGIN/END}"
+            body="${key#*"$begin"}"; body="${body%"$end"*}"
+            # shellcheck disable=SC2086  # word splitting of the base64 body is intended
+            key="$(printf '%s\n' "$begin" $body "$end")"
+            echo "::warning::SSH_PRIVATE_KEY had lost its line breaks; they were restored. Consider pasting the key file again."
+          fi
+
+          # The file name avoids the word "deploy", which GitHub masks (it is the SSH_USER secret value).
+          printf '%s\n' "$key" > ~/.ssh/ci_key
+          chmod 600 ~/.ssh/ci_key
+          if ! error="$(ssh-keygen -y -P '' -f ~/.ssh/ci_key 2>&1 > ~/.ssh/ci_key.pub)"; then
+            if grep -qi passphrase <<<"$error"; then
+              fail "SSH_PRIVATE_KEY is protected by a passphrase. Create a dedicated deploy key without one: ssh-keygen -t ed25519 -f smart-rss-deploy -N \"\""
+            fi
+            fail "SSH_PRIVATE_KEY is not a valid private key (${error}). Paste the whole content of the private key file again"
+          fi
+          # The fingerprint is public information: compare it with 'ssh-keygen -lf ~/.ssh/authorized_keys' on the server.
+          echo "Deploy key fingerprint: $(ssh-keygen -lf ~/.ssh/ci_key.pub)"
+
           printf '%s\n' "$SSH_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           cat > ~/.ssh/config <<EOF
           Host deploy-target
             HostName ${TARGET_HOST}
             User ${TARGET_USER}
             Port ${TARGET_PORT}
-            IdentityFile ~/.ssh/deploy_key
+            IdentityFile ~/.ssh/ci_key
             IdentitiesOnly yes
             StrictHostKeyChecking yes
+            PasswordAuthentication no
+            BatchMode yes
             ServerAliveInterval 30
           EOF
 
