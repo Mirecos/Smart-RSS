@@ -229,6 +229,7 @@ then deploy again.
 | `Host key verification failed` | `SSH_KNOWN_HOSTS` doesn't match the server (reinstalled server, wrong port). Run `ssh-keyscan` again |
 | `Load key …: error in libcrypto` | `SSH_PRIVATE_KEY` isn't a usable private key. Paste the whole private key file (not the `.pub`), including the `BEGIN`/`END` lines, with no passphrase and not in PuTTY `.ppk` format. The workflow now says which of these it is |
 | `Permission denied (publickey)` | Wrong `SSH_USER`, or the public key isn't in `/home/deploy/.ssh/authorized_keys` |
+| `error saving credentials: mkdir /home/…/.docker: permission denied` | The deploy user can't write to its home folder. The deploy script no longer needs it (it logs in to the registry with a temporary folder), but fix it anyway with `chown deploy:deploy /home/deploy` (as root) |
 | `permission denied … docker.sock` | The deploy user isn't in the `docker` group. Run `usermod -aG docker deploy`, then reconnect |
 | `denied` while pulling the image | The image couldn't be pulled. The workflow logs in to GHCR with its own token; if you pull by hand, run `docker login ghcr.io` first or make the package public |
 | `Invalid configuration: …` in the app logs | A value in `APP_ENV` is invalid (e.g. an admin password under 8 characters). Fix the secret and redeploy |

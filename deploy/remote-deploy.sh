@@ -27,10 +27,21 @@ if [ "${SKIP_PULL:-0}" != "1" ]; then
   token=""
   if [ -n "$REGISTRY_USER" ] && [ ! -t 0 ]; then token="$(cat)"; fi
   if [ -n "$token" ]; then
-    printf '%s' "$token" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin >/dev/null
+    # Log in with a throw-away Docker config: nothing is written to the user's home folder (which may
+    # not be writable) and the registry token never stays on the server.
+    auth_dir="$(mktemp -d)"
+    trap 'rm -rf "$auth_dir"' EXIT
+    # Keep per-user CLI plugins (e.g. a docker compose installed in ~/.docker/cli-plugins) usable.
+    if [ -d "${HOME:-/nonexistent}/.docker/cli-plugins" ]; then ln -s "$HOME/.docker/cli-plugins" "$auth_dir/cli-plugins"; fi
+    export DOCKER_CONFIG="$auth_dir"
+    printf '%s' "$token" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin >/dev/null 2>&1 \
+      || fail "Could not log in to ghcr.io with the workflow token"
   fi
   docker compose pull --quiet
-  if [ -n "$token" ]; then docker logout ghcr.io >/dev/null 2>&1 || true; fi
+  if [ -n "$token" ]; then
+    unset DOCKER_CONFIG
+    rm -rf "$auth_dir"
+  fi
 fi
 
 # --no-build: on the server the image always comes from the registry, never from local sources.
