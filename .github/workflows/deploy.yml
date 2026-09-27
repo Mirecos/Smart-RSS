@@ -78,27 +78,55 @@ jobs:
       contents: read
       packages: read
     env:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_PORT: ${{ vars.SSH_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/smart-rss' }}
     steps:
       - uses: actions/checkout@v4
 
+      # Validates and cleans the connection settings (pasted secrets often carry spaces, line breaks,
+      # "user@", "ssh://" or ":port"), then exports them as TARGET_HOST / TARGET_USER / TARGET_PORT.
+      # Secret values are never printed: errors only describe what is wrong.
       - name: Check deployment settings
         env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT_SETTING: ${{ vars.SSH_PORT }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
           APP_ENV: ${{ secrets.APP_ENV }}
         run: |
+          fail() { echo "::error::$*"; exit 1; }
+          clean() { printf '%s' "$1" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+
           missing=()
           for name in SSH_HOST SSH_USER SSH_PRIVATE_KEY SSH_KNOWN_HOSTS APP_ENV; do
             [ -n "${!name}" ] || missing+=("$name")
           done
-          if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Missing secrets in the 'production' environment: ${missing[*]} (see README > Deployment)"
-            exit 1
+          [ ${#missing[@]} -eq 0 ] || fail "Missing secrets in the 'production' environment: ${missing[*]} (see README > Deployment)"
+
+          host="$(clean "$SSH_HOST")"
+          user="$(clean "$SSH_USER")"
+          port="$(clean "${SSH_PORT_SETTING:-}")"
+          fixes=()
+          if [[ "$host" == ssh://* ]]; then host="${host#ssh://}"; fixes+=("removed the ssh:// prefix"); fi
+          if [[ "$host" == *@* ]]; then host="${host#*@}"; fixes+=("removed a 'user@' prefix (the user belongs in SSH_USER)"); fi
+          host="${host%%/*}"
+          if [[ "$host" =~ ^([^:]+):([0-9]+)$ ]]; then
+            host="${BASH_REMATCH[1]}"; port="${port:-${BASH_REMATCH[2]}}"; fixes+=("moved ':port' out of the host (use the SSH_PORT variable)")
           fi
+          host="${host#[}"; host="${host%]}"
+          port="${port:-22}"
+
+          [[ "$host" =~ ^[A-Za-z0-9.-]+$ || "$host" =~ ^[0-9A-Fa-f:]+$ ]] \
+            || fail "SSH_HOST must contain only the server's IP address or hostname (it contains spaces or other characters)"
+          [[ "$port" =~ ^[0-9]+$ ]] || fail "The SSH_PORT variable must be a number"
+          [[ "$user" =~ ^[a-z_][a-z0-9_.-]*$ ]] || fail "SSH_USER must contain only the Linux user name, e.g. deploy"
+          getent ahosts "$host" >/dev/null \
+            || fail "SSH_HOST cannot be resolved from GitHub's runners (they only use public DNS). Use the server's public IP address, or a hostname that exists in public DNS"
+
+          for fix in "${fixes[@]}"; do echo "::warning::SSH_HOST: ${fix}. It works, but consider cleaning the secret."; done
+          echo "::add-mask::${host}"
+          echo "::add-mask::${user}"
+          { echo "TARGET_HOST=${host}"; echo "TARGET_USER=${user}"; echo "TARGET_PORT=${port}"; } >> "$GITHUB_ENV"
 
       - id: target
         name: Resolve image
@@ -115,14 +143,15 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          # tr -d '\r': keys and host lists pasted from Windows may carry CRLF line endings.
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           cat > ~/.ssh/config <<EOF
           Host deploy-target
-            HostName ${SSH_HOST}
-            User ${SSH_USER}
-            Port ${SSH_PORT}
+            HostName ${TARGET_HOST}
+            User ${TARGET_USER}
+            Port ${TARGET_PORT}
             IdentityFile ~/.ssh/deploy_key
             IdentitiesOnly yes
             StrictHostKeyChecking yes
