@@ -1,0 +1,68 @@
+name: smart-rss
+
+# One file for both uses:
+# - locally, `docker compose up -d --build` builds the image from the sources (scripts/start.*);
+# - on the server, the Deploy workflow sets APP_IMAGE to the published image and runs `up --no-build`.
+services:
+  app:
+    build: .
+    image: ${APP_IMAGE:-smart-rss:local}
+    restart: unless-stopped
+    # Published on localhost by default. Behind the "https" profile, Caddy reaches the app over the
+    # internal network, so keep 127.0.0.1 there too.
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Only reachable when the "js" profile is running; otherwise the UI disables JS rendering.
+      RENDERER_URL: ws://renderer:3000?token=${RENDERER_TOKEN:-change-me-local-renderer}
+      FETCH_MAX_BYTES: ${FETCH_MAX_BYTES:-5242880}
+      FETCH_MAX_REDIRECTS: ${FETCH_MAX_REDIRECTS:-5}
+      SCHEDULER_TICK_SECONDS: ${SCHEDULER_TICK_SECONDS:-60}
+      SCHEDULER_CONCURRENCY: ${SCHEDULER_CONCURRENCY:-4}
+      MAX_CONSECUTIVE_FAILURES: ${MAX_CONSECUTIVE_FAILURES:-10}
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
+      SEED_STARTER_SOURCES: ${SEED_STARTER_SOURCES:-true}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    volumes:
+      - rss-data:/data
+
+  # Optional headless Chromium for sources that need JavaScript rendering (profile "js").
+  renderer:
+    image: ghcr.io/browserless/chromium:latest
+    profiles: ["js"]
+    restart: unless-stopped
+    environment:
+      TOKEN: ${RENDERER_TOKEN:-change-me-local-renderer}
+      CONCURRENT: "2"
+      TIMEOUT: "60000"
+    expose:
+      - "3000"
+
+  # Optional HTTPS reverse proxy with automatic Let's Encrypt certificates (profile "https").
+  # Needs DOMAIN pointing to the server, ports 80/443 open, and TRUST_PROXY=true.
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  rss-data:
+  caddy-data:
+  caddy-config:

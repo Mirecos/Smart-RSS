@@ -1,0 +1,6 @@
+# HTTPS reverse proxy (profile "https"). Caddy obtains and renews the certificate automatically
+# for DOMAIN; the domain's DNS A/AAAA record must point to this server and ports 80/443 must be open.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8080
+}

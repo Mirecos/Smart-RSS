@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --color-accent-50: #fff7ed;
+  --color-accent-100: #ffedd5;
+  --color-accent-500: #f97316;
+  --color-accent-600: #ea580c;
+  --color-accent-700: #c2410c;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+}
+
+/* Readable typography for article bodies (sanitized remote HTML). */
+.article-content {
+  @apply text-[1.02rem] leading-7 text-stone-800 dark:text-stone-200;
+  overflow-wrap: anywhere;
+}
+.article-content > * + * {
+  @apply mt-4;
+}
+.article-content h1,
+.article-content h2,
+.article-content h3,
+.article-content h4 {
+  @apply mt-6 font-semibold text-stone-900 dark:text-stone-50;
+}
+.article-content h1 { @apply text-2xl; }
+.article-content h2 { @apply text-xl; }
+.article-content h3 { @apply text-lg; }
+.article-content a {
+  @apply text-accent-700 underline decoration-accent-500/40 underline-offset-2 hover:decoration-accent-600 dark:text-accent-500;
+}
+.article-content img {
+  @apply my-4 h-auto max-w-full rounded-lg;
+}
+.article-content ul { @apply list-disc pl-6; }
+.article-content ol { @apply list-decimal pl-6; }
+.article-content blockquote {
+  @apply border-l-4 border-stone-300 pl-4 italic text-stone-600 dark:border-stone-700 dark:text-stone-400;
+}
+.article-content pre {
+  @apply overflow-x-auto rounded-lg bg-stone-900 p-4 text-sm text-stone-100;
+}
+.article-content code {
+  @apply rounded bg-stone-100 px-1 py-0.5 text-sm dark:bg-stone-800;
+}
+.article-content pre code { @apply bg-transparent p-0; }
+.article-content table { @apply w-full border-collapse text-sm; }
+.article-content th,
+.article-content td { @apply border border-stone-200 px-2 py-1 dark:border-stone-700; }
