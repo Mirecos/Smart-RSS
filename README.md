@@ -144,7 +144,7 @@ mkdir -p /opt/smart-rss && chown deploy:deploy /opt/smart-rss
 ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp && ufw enable
 ```
 
-In your DNS zone (for example in the OVH Control Panel), create an **A record** (and AAAA for IPv6) for your domain, such as `rss.example.com`, pointing to the server's IP address. Caddy needs it to obtain the HTTPS certificate.
+In your DNS zone (for example in the OVH Control Panel: *Web Cloud → Domain names → your domain → DNS zone → Add an entry → A*), create an **A record** (and AAAA for IPv6) for the app's own **subdomain**, such as `smartss.example.com`, pointing to the server's IP address. The proxy needs it to obtain the HTTPS certificate. DNS changes can take a few minutes to propagate.
 
 > Adding `deploy` to the `docker` group gives it root-equivalent power on the server. That is normal for a Docker deploy user, but use this key for nothing else.
 
@@ -194,7 +194,8 @@ For `APP_ENV`, the template is already set up for a public server, and you choos
   - `COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.caddy-docker-proxy.yml` gives the app the `caddy` Docker labels (`caddy: ${DOMAIN}`, `caddy.reverse_proxy: {{upstreams 8080}}`).
   - It also joins the app to the proxy's Docker network, set with `CADDY_NETWORK` (default `caddy`; find yours with `docker network ls`).
   - Your main proxy then gets the certificate and routes the app's path to it. Nothing else takes ports 80/443.
-  - With `BASE_PATH=/smart-rss` (the template's default), only `DOMAIN/smart-rss*` goes to the app (label `caddy.handle: /smart-rss*`). The rest of the domain stays with your other containers.
+  - The template's default gives the app its own subdomain, `DOMAIN=smartss.example.com`, and the whole subdomain is routed to it.
+  - To share a domain instead, set `BASE_PATH=/smart-rss`. Then only `DOMAIN/smart-rss*` goes to the app, and the rest of the domain stays with your other containers.
 - **Option B: no proxy on the server yet.** Remove those lines and set `COMPOSE_PROFILES=https`. The app then starts its own Caddy on ports 80/443.
 
 In both cases:
@@ -210,7 +211,7 @@ Any variable from `.env.example` can be added.
 
 - **Automatically:** push to `main`. Follow the progress under **Actions → Deploy**. The deployment fails, and says why, if tests fail or if the app isn't healthy after starting.
 - **Manually:** go to **Actions → Deploy → Run workflow**.
-- **First login:** open `https://your-domain` and sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Then change the password under **My account**.
+- **First login:** open `https://smartss.your-domain` (your `DOMAIN`) and sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Then change the password under **My account**.
 
 ### Everyday operations
 
