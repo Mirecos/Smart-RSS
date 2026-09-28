@@ -19,7 +19,20 @@ fail() {
 command -v docker >/dev/null || fail "Docker is not installed on this server"
 docker compose version >/dev/null 2>&1 || fail "The Docker Compose plugin is not installed on this server"
 
-image="$(grep -E '^APP_IMAGE=' .env | tail -n 1 | cut -d= -f2- || true)"
+env_value() { grep -E "^$1=" .env | tail -n 1 | cut -d= -f2- | tr -d "\"'" || true; }
+
+# Routing through an existing caddy-docker-proxy: its network must exist, and the built-in Caddy
+# must stay off (both would want ports 80/443).
+if [[ "$(env_value COMPOSE_FILE)" == *caddy-docker-proxy* ]]; then
+  network="$(env_value CADDY_NETWORK)"; network="${network:-caddy}"
+  docker network inspect "$network" >/dev/null 2>&1 \
+    || fail "Docker network '${network}' not found. Set CADDY_NETWORK to the network of your caddy-docker-proxy (see: docker network ls)"
+  [[ ",$(env_value COMPOSE_PROFILES)," != *,https,* ]] \
+    || fail "Remove 'https' from COMPOSE_PROFILES: your caddy-docker-proxy is already the HTTPS proxy"
+  [ -n "$(env_value DOMAIN)" ] || fail "DOMAIN must be set for caddy-docker-proxy routing"
+fi
+
+image="$(env_value APP_IMAGE)"
 [ -n "$image" ] || fail "APP_IMAGE is not set in .env"
 echo "Deploying ${image}"
 

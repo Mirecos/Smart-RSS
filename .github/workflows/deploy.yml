@@ -199,7 +199,7 @@ jobs:
           # shellcheck disable=SC2029
           ssh deploy-target "mkdir -p '${DEPLOY_PATH}/deploy'"
           scp docker-compose.yml "deploy-target:${DEPLOY_PATH}/docker-compose.yml"
-          scp deploy/Caddyfile deploy/remote-deploy.sh "deploy-target:${DEPLOY_PATH}/deploy/"
+          scp deploy/Caddyfile deploy/remote-deploy.sh deploy/docker-compose.caddy-docker-proxy.yml "deploy-target:${DEPLOY_PATH}/deploy/"
 
       - name: Write the server .env
         env:

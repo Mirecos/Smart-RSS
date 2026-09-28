@@ -1,0 +1,25 @@
+# Routing through an existing lucaslorentz/caddy-docker-proxy (the server's main proxy).
+#
+# Enable it in the server .env (the APP_ENV secret):
+#   COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.caddy-docker-proxy.yml
+#   DOMAIN=rss.example.com
+#   CADDY_NETWORK=caddy        # the Docker network your caddy-docker-proxy container is attached to
+#   TRUST_PROXY=true
+# and do NOT enable the built-in "https" profile (the main proxy already owns ports 80/443).
+#
+# The main proxy reads these labels, obtains the HTTPS certificate for DOMAIN and forwards
+# requests to the app's port 8080 over the shared network.
+services:
+  app:
+    labels:
+      caddy: ${DOMAIN:?Set DOMAIN (the public domain name) in .env}
+      caddy.reverse_proxy: "{{upstreams 8080}}"
+      caddy.encode: zstd gzip
+    networks:
+      - default
+      - caddy-proxy
+
+networks:
+  caddy-proxy:
+    external: true
+    name: ${CADDY_NETWORK:-caddy}

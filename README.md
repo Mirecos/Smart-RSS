@@ -118,7 +118,8 @@ push to main ──► GitHub Actions
                        - upload docker-compose.yml + deploy/
                        - write /opt/smart-rss/.env from the APP_ENV secret (+ APP_IMAGE)
                        - docker compose pull && up -d, then wait until the app is healthy
-OVH server:  Caddy (HTTPS, ports 80/443) ──► app (Node + SQLite volume) [──► optional renderer]
+OVH server:  your caddy-docker-proxy (via Docker labels) or the built-in Caddy (HTTPS, 80/443)
+                  ──► app (Node + SQLite volume) [──► optional renderer]
 ```
 
 - **All app settings** live in **one GitHub secret, `APP_ENV`**, which holds the complete production `.env`. To change any variable, edit that secret and re-run the workflow.
@@ -138,7 +139,7 @@ adduser --disabled-password --gecos "" deploy
 usermod -aG docker deploy
 mkdir -p /opt/smart-rss && chown deploy:deploy /opt/smart-rss
 
-# Firewall (if you use ufw): SSH + HTTP/HTTPS for Caddy
+# Firewall (if you use ufw): SSH + HTTP/HTTPS for the proxy (already open if you run caddy-docker-proxy)
 ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp && ufw enable
 ```
 
@@ -186,11 +187,20 @@ ssh-keygen -t ed25519 -C "github-deploy-smart-rss" -f smart-rss-deploy -N ""
    | `SSH_PORT` | `22` | SSH port of the server |
    | `DEPLOY_PATH` | `/opt/smart-rss` | Folder on the server |
 
-For `APP_ENV`, the template is already set up for a public server:
-- `COMPOSE_PROFILES=https` starts Caddy with automatic HTTPS, together with `DOMAIN` and `TRUST_PROXY=true`.
-- `BIND_ADDRESS=127.0.0.1` keeps the app itself reachable only through Caddy.
+For `APP_ENV`, the template is already set up for a public server, and you choose how HTTPS is handled:
+
+- **Option A: your server already runs [caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy)** (the template's default).
+  - `COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.caddy-docker-proxy.yml` gives the app the `caddy` Docker labels (`caddy: ${DOMAIN}`, `caddy.reverse_proxy: {{upstreams 8080}}`).
+  - It also joins the app to the proxy's Docker network, set with `CADDY_NETWORK` (default `caddy`; find yours with `docker network ls`).
+  - Your main proxy then gets the certificate and routes `DOMAIN` to the app. Nothing else takes ports 80/443.
+- **Option B: no proxy on the server yet.** Remove those lines and set `COMPOSE_PROFILES=https`. The app then starts its own Caddy on ports 80/443.
+
+In both cases:
+- `DOMAIN` is your public domain name.
+- `TRUST_PROXY=true` gives secure cookies and the real client IP.
+- `BIND_ADDRESS=127.0.0.1` keeps the app's own port private, so traffic comes only through the proxy.
 - `ADMIN_USERNAME` / `ADMIN_PASSWORD` create the first admin.
-- `RENDERER_TOKEN` is used only if you add `js` to the profiles (`COMPOSE_PROFILES=https,js`).
+- `RENDERER_TOKEN` is used only if you add `js` to `COMPOSE_PROFILES`.
 
 Any variable from `.env.example` can be added.
 
@@ -233,7 +243,11 @@ then deploy again.
 | `permission denied … docker.sock` | The deploy user isn't in the `docker` group. Run `usermod -aG docker deploy`, then reconnect |
 | `denied` while pulling the image | The image couldn't be pulled. The workflow logs in to GHCR with its own token; if you pull by hand, run `docker login ghcr.io` first or make the package public |
 | `Invalid configuration: …` in the app logs | A value in `APP_ENV` is invalid (e.g. an admin password under 8 characters). Fix the secret and redeploy |
-| No HTTPS certificate | DNS doesn't point to the server yet, or ports 80/443 are closed. Check `docker compose logs caddy` |
+| No HTTPS certificate | DNS doesn't point to the server yet, or ports 80/443 are closed. Check the proxy's logs: `docker compose logs caddy` (built-in), or the logs of your caddy-docker-proxy container |
+| `Docker network '…' not found` | `CADDY_NETWORK` must be the network your caddy-docker-proxy container uses (`docker network ls`, `docker inspect <proxy>`) |
+| `Remove 'https' from COMPOSE_PROFILES` | With caddy-docker-proxy, don't also start the built-in Caddy: both would need ports 80/443 |
+| `address already in use` on port 80/443 | Another proxy already runs on the server. Use Option A (caddy-docker-proxy labels) instead of `COMPOSE_PROFILES=https` |
+| 502 / site not found via caddy-docker-proxy | The app isn't on the proxy's network, or the proxy only watches specific networks (`CADDY_INGRESS_NETWORKS`). Include `CADDY_NETWORK` there |
 | Login works but you are logged out immediately | `TRUST_PROXY=true` is missing behind Caddy, or you are browsing over `http://` |
 
 ---
