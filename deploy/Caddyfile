@@ -1,6 +1,10 @@
 # HTTPS reverse proxy (profile "https"). Caddy obtains and renews the certificate automatically
 # for DOMAIN; the domain's DNS A/AAAA record must point to this server and ports 80/443 must be open.
+# Only DOMAIN{BASE_PATH}* is sent to the app (everything when BASE_PATH is empty); the app knows its
+# base path, so the prefix is NOT stripped.
 {$DOMAIN} {
 	encode zstd gzip
-	reverse_proxy app:8080
+	handle {$BASE_PATH}* {
+		reverse_proxy app:8080
+	}
 }

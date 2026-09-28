@@ -50,7 +50,8 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: RouteContext, deps
     deps.accountLimiter.reset(accountKey);
     const now = ctx.now();
     sessions.purgeExpired(now);
-    setSessionCookie(request, reply, sessions.create(credentials.user.id, now, deps.sessionTtlMs), deps.sessionTtlMs);
+    const token = sessions.create(credentials.user.id, now, deps.sessionTtlMs);
+    setSessionCookie(request, reply, token, deps.sessionTtlMs, ctx.config.basePath);
     request.log.info({ userId: credentials.user.id }, 'User logged in');
     return success(credentials.user);
   });
@@ -58,7 +59,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: RouteContext, deps
   app.post('/auth/logout', async (request, reply) => {
     const token = request.cookies[SESSION_COOKIE];
     if (token) sessions.remove(token);
-    clearSessionCookie(reply);
+    clearSessionCookie(reply, ctx.config.basePath);
     return success(null);
   });
 

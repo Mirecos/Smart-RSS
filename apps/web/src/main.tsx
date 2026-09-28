@@ -6,6 +6,7 @@ import { App } from './App';
 import { queryKeys } from './hooks/queries';
 import './index.css';
 import { ApiError } from './lib/api';
+import { BASE_PATH } from './lib/base';
 import { applyTheme, readStored, THEME_KEY, type Theme } from './lib/storage';
 
 applyTheme(readStored<Theme>(THEME_KEY, 'system'));
@@ -33,7 +34,7 @@ if (!root) throw new Error('Missing #root element');
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={BASE_PATH || undefined}>
         <App />
       </BrowserRouter>
     </QueryClientProvider>

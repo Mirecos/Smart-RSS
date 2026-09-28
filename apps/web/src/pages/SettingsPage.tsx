@@ -1,6 +1,7 @@
 import type { CategoryDto } from '@smart-rss/shared';
 import { useState } from 'react';
 import { useIsAdmin } from '../auth/AuthContext';
+import { BASE_PATH } from '../lib/base';
 import { Button, Card, ErrorBanner, Field, Input, SectionTitle, Select } from '../components/ui';
 import { useCategories, useCategoryMutations, useSettings, useUpdateSettings } from '../hooks/queries';
 import { applyTheme, readStored, THEME_KEY, writeStored, type Theme } from '../lib/storage';
@@ -110,7 +111,7 @@ export function SettingsPage() {
           <SectionTitle title="Output feeds" description="Subscribe to your aggregated items from any other reader." />
           <ul className="space-y-1 font-mono text-xs">
             {['all.rss', 'all.atom', 'all.json', 'category-ID.rss', 'source-ID.json'].map((file) => (
-              <li key={file}>{origin}/feeds/{file}</li>
+              <li key={file}>{origin}{BASE_PATH}/feeds/{file}</li>
             ))}
           </ul>
         </Card>

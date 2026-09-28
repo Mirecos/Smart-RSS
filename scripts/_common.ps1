@@ -28,7 +28,8 @@ function Assert-Docker {
 function Get-AppUrl {
   $bindHost = Get-EnvValue 'BIND_ADDRESS' '127.0.0.1'
   if ($bindHost -eq '0.0.0.0') { $bindHost = '127.0.0.1' }
-  return "http://${bindHost}:$(Get-EnvValue 'PORT' '8080')"
+  $basePath = (Get-EnvValue 'BASE_PATH' '').TrimEnd('/')
+  return "http://${bindHost}:$(Get-EnvValue 'PORT' '8080')$basePath"
 }
 
 function Wait-Healthy([string]$Url, [int]$TimeoutSeconds = 120) {

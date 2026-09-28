@@ -11,10 +11,13 @@
 # requests to the app's port 8080 over the shared network.
 services:
   app:
+    # Only DOMAIN${BASE_PATH}* is routed to the app (e.g. rss.example.com/smart-rss*); the rest of the
+    # domain stays with your other containers. The prefix is kept: the app knows its BASE_PATH.
     labels:
       caddy: ${DOMAIN:?Set DOMAIN (the public domain name) in .env}
-      caddy.reverse_proxy: "{{upstreams 8080}}"
-      caddy.encode: zstd gzip
+      caddy.handle: "${BASE_PATH:-}*"
+      caddy.handle.reverse_proxy: "{{upstreams 8080}}"
+      caddy.handle.encode: zstd gzip
     networks:
       - default
       - caddy-proxy

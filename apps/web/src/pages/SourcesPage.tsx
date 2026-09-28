@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Badge, Button, EmptyState, ErrorBanner, Spinner } from '../components/ui';
 import { useCategories, useDeleteSource, useImports, useRefreshSource, useSources, useToggleSource } from '../hooks/queries';
 import { unwrapBackup } from '../lib/api';
+import { withBase } from '../lib/base';
 import { formatInterval, timeAgo } from '../lib/format';
 
 function HealthBadge({ source }: { source: SourceDto }) {
@@ -88,9 +89,9 @@ function ImportExport({ isEmpty }: { isEmpty: boolean }) {
       <div className="flex flex-wrap gap-2">
         {!isEmpty ? <Button size="sm" onClick={addStarter} disabled={imports.starter.isPending}>{starterLabel}</Button> : null}
         <Button size="sm" onClick={() => opmlInput.current?.click()}>Import OPML</Button>
-        <a href="/api/opml" className="rounded-lg border border-stone-300 px-2.5 py-1 text-xs font-medium hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800">Export OPML</a>
+        <a href={withBase('/api/opml')}className="rounded-lg border border-stone-300 px-2.5 py-1 text-xs font-medium hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800">Export OPML</a>
         <Button size="sm" onClick={() => backupInput.current?.click()}>Restore backup</Button>
-        <a href="/api/export" download="smart-rss-backup.json" className="rounded-lg border border-stone-300 px-2.5 py-1 text-xs font-medium hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800">Download backup</a>
+        <a href={withBase('/api/export')}download="smart-rss-backup.json" className="rounded-lg border border-stone-300 px-2.5 py-1 text-xs font-medium hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800">Download backup</a>
         <input ref={opmlInput} type="file" accept=".opml,.xml,text/xml" hidden onChange={onFile('opml')} aria-label="OPML file" />
         <input ref={backupInput} type="file" accept=".json,application/json" hidden onChange={onFile('backup')} aria-label="Backup file" />
       </div>

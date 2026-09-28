@@ -7,7 +7,7 @@ import type { RouteContext } from './context.js';
 
 export function registerOpmlRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.get('/opml', async (request, reply) => {
-    const baseUrl = `${request.protocol}://${request.host}`;
+    const baseUrl = `${request.protocol}://${request.host}${ctx.config.basePath}`;
     const xml = buildOpml(ctx.repos.categories.list(), ctx.repos.sources.list(), baseUrl);
     return reply
       .header('content-type', 'text/x-opml; charset=utf-8')

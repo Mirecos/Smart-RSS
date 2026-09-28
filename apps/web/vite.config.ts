@@ -5,7 +5,10 @@ import { defineConfig } from 'vite';
 
 const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:8080';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Relative asset URLs in the build: resolved against the <base href> the server injects, so the
+  // same build works at the domain root or under any BASE_PATH (e.g. /smart-rss).
+  base: command === 'build' ? './' : '/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -16,4 +19,4 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': API_TARGET, '/feeds': API_TARGET },
   },
-});
+}));

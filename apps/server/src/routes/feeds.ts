@@ -41,7 +41,7 @@ export function registerFeedRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const origin = `${request.protocol}://${request.host}`;
     const { body, contentType } = renderFeed(match[4] as OutputFormat, {
       title,
-      siteUrl: `${origin}/`,
+      siteUrl: `${origin}${ctx.config.basePath}/`,
       selfUrl: `${origin}${request.url}`,
       items,
     });

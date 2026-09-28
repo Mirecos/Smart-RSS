@@ -32,7 +32,9 @@ app_url() {
   local host
   host="$(env_value BIND_ADDRESS 127.0.0.1)"
   [ "$host" = "0.0.0.0" ] && host="127.0.0.1"
-  echo "http://${host}:$(env_value PORT 8080)"
+  local base
+  base="$(env_value BASE_PATH "")"
+  echo "http://${host}:$(env_value PORT 8080)${base%/}"
 }
 
 wait_healthy() {

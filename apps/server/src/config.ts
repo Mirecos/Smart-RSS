@@ -29,6 +29,12 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.preprocess(emptyAsUndefined, passwordSchema.optional()),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   TRUST_PROXY: booleanFromEnv.default(false),
+  BASE_PATH: z
+    .string()
+    .trim()
+    .default('')
+    .transform((value) => value.replace(/\/+$/, ''))
+    .pipe(z.string().regex(/^(\/[A-Za-z0-9._~-]+)*$/, 'must look like /smart-rss (a path starting with "/")')),
 });
 
 export interface AppConfig {
@@ -56,6 +62,8 @@ export interface AppConfig {
   };
   /** Trust X-Forwarded-* headers (set when running behind a reverse proxy doing HTTPS). */
   trustProxy: boolean;
+  /** Path prefix the app is served under, e.g. "/smart-rss" ("" = domain root). */
+  basePath: string;
 }
 
 /** Parses environment variables and fails fast on invalid values. */
@@ -94,5 +102,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       sessionTtlMs: e.SESSION_TTL_DAYS * DAY_MS,
     },
     trustProxy: e.TRUST_PROXY,
+    basePath: e.BASE_PATH,
   };
 }

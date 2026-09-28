@@ -25,6 +25,8 @@ import type {
   SourceDto,
 } from '@smart-rss/shared';
 
+import { withBase } from './base';
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -49,7 +51,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, init);
+    response = await fetch(withBase(`/api${path}`), init);
   } catch {
     throw new ApiError('Cannot reach the server. Is it running?', 0);
   }

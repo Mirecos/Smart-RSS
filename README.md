@@ -92,6 +92,7 @@ All settings are environment variables in `.env`. **[`.env.example`](.env.exampl
 | `BIND_ADDRESS` / `PORT` | `127.0.0.1` / `8080` | Where the app is published |
 | `COMPOSE_PROFILES` | – | Optional services: `js` (JavaScript renderer), `https` (Caddy with automatic HTTPS) |
 | `DOMAIN` | – | Public domain name, used with the `https` profile |
+| `BASE_PATH` | – | Serve the app under a path, e.g. `/smart-rss` → `https://DOMAIN/smart-rss/` (API, feeds, login cookie and web app all follow). Empty = domain root |
 | `TRUST_PROXY` | `false` | `true` behind the HTTPS proxy (secure cookies, real client IPs) |
 | `SESSION_TTL_DAYS` | `30` | How long a login stays valid (extended while you use the app) |
 | `SEED_STARTER_SOURCES` | `true` | Add the starter sources on the first start |
@@ -192,7 +193,8 @@ For `APP_ENV`, the template is already set up for a public server, and you choos
 - **Option A: your server already runs [caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy)** (the template's default).
   - `COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.caddy-docker-proxy.yml` gives the app the `caddy` Docker labels (`caddy: ${DOMAIN}`, `caddy.reverse_proxy: {{upstreams 8080}}`).
   - It also joins the app to the proxy's Docker network, set with `CADDY_NETWORK` (default `caddy`; find yours with `docker network ls`).
-  - Your main proxy then gets the certificate and routes `DOMAIN` to the app. Nothing else takes ports 80/443.
+  - Your main proxy then gets the certificate and routes the app's path to it. Nothing else takes ports 80/443.
+  - With `BASE_PATH=/smart-rss` (the template's default), only `DOMAIN/smart-rss*` goes to the app (label `caddy.handle: /smart-rss*`). The rest of the domain stays with your other containers.
 - **Option B: no proxy on the server yet.** Remove those lines and set `COMPOSE_PROFILES=https`. The app then starts its own Caddy on ports 80/443.
 
 In both cases:
@@ -247,6 +249,8 @@ then deploy again.
 | `Docker network '…' not found` | `CADDY_NETWORK` must be the network your caddy-docker-proxy container uses (`docker network ls`, `docker inspect <proxy>`) |
 | `Remove 'https' from COMPOSE_PROFILES` | With caddy-docker-proxy, don't also start the built-in Caddy: both would need ports 80/443 |
 | `address already in use` on port 80/443 | Another proxy already runs on the server. Use Option A (caddy-docker-proxy labels) instead of `COMPOSE_PROFILES=https` |
+| Blank page or 404 on assets under `DOMAIN/smart-rss` | `BASE_PATH` must match the path the proxy routes (`/smart-rss`, no trailing slash). Don't strip the prefix in the proxy: the app expects it |
+| `Invalid configuration: BASE_PATH …` | It must start with `/` (e.g. `/smart-rss`). In Git Bash on Windows, `/smart-rss` may be rewritten into a Windows path; set `MSYS_NO_PATHCONV=1` or put it in `.env` |
 | 502 / site not found via caddy-docker-proxy | The app isn't on the proxy's network, or the proxy only watches specific networks (`CADDY_INGRESS_NETWORKS`). Include `CADDY_NETWORK` there |
 | Login works but you are logged out immediately | `TRUST_PROXY=true` is missing behind Caddy, or you are browsing over `http://` |
 

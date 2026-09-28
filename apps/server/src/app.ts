@@ -1,10 +1,11 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyError, type FastifyInstance, type FastifyServerOptions } from 'fastify';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type { AppConfig } from './config.js';
 import type { Db } from './db/client.js';
+import { injectBasePath, stripBasePath } from './lib/base-path.js';
 import { HttpError } from './lib/http.js';
 import type { PipelineDeps } from './pipeline/run.js';
 import type { FetchImpl } from './pipeline/types.js';
@@ -65,7 +66,8 @@ const errorBody = (message: string, details?: unknown) => ({
 function registerSecurity(app: FastifyInstance, config: AppConfig): void {
   // No authentication: reject cross-site writes (CSRF) from other origins the browser may have open.
   app.addHook('onRequest', async (request) => {
-    if (!request.url.startsWith('/api/') || SAFE_METHODS.has(request.method)) return;
+    const path = stripBasePath(request.url, config.basePath);
+    if (!path?.startsWith('/api/') || SAFE_METHODS.has(request.method)) return;
     // Modern browsers always send Sec-Fetch-Site; "same-site" covers other ports on localhost, so reject it too.
     const fetchSite = request.headers['sec-fetch-site'];
     const origin = request.headers.origin;
@@ -95,7 +97,13 @@ function registerSecurity(app: FastifyInstance, config: AppConfig): void {
   });
 }
 
-function registerErrorHandling(app: FastifyInstance, webDistDir: string | null): void {
+/** The web app's index.html with the base path injected (served for "/" and every client-side route). */
+function loadIndexHtml(webDistDir: string | null, basePath: string): string | null {
+  const file = webDistDir ? join(webDistDir, 'index.html') : null;
+  return file && existsSync(file) ? injectBasePath(readFileSync(file, 'utf8'), basePath) : null;
+}
+
+function registerErrorHandling(app: FastifyInstance, indexHtml: string | null, basePath: string): void {
   app.setErrorHandler((error: FastifyError | HttpError, request, reply) => {
     if (error instanceof HttpError) {
       return reply.status(error.statusCode).send(errorBody(error.message, error.details));
@@ -106,17 +114,22 @@ function registerErrorHandling(app: FastifyInstance, webDistDir: string | null):
   });
 
   app.setNotFoundHandler((request, reply) => {
-    const isAppRoute = !request.url.startsWith('/api') && !request.url.startsWith('/feeds');
-    if (webDistDir && request.method === 'GET' && isAppRoute) return reply.sendFile('index.html');
+    const path = stripBasePath(request.url, basePath);
+    const isAppRoute = path !== null && !path.startsWith('/api') && !path.startsWith('/feeds');
+    if (indexHtml && request.method === 'GET' && isAppRoute) {
+      return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(indexHtml);
+    }
     return reply.status(404).send(errorBody('Route not found'));
   });
 }
 
-async function registerStatic(app: FastifyInstance, webDistDir: string | null): Promise<void> {
+async function registerStatic(app: FastifyInstance, webDistDir: string | null, basePath: string): Promise<void> {
   if (!webDistDir) return;
   await app.register(fastifyStatic, {
     root: webDistDir,
-    prefix: '/',
+    prefix: `${basePath}/`,
+    // index.html is served by the not-found handler, with the base path injected.
+    index: false,
     setHeaders: (reply, filePath) => {
       const immutable = /[\\/]assets[\\/]/.test(filePath);
       reply.header('cache-control', immutable ? 'public, max-age=31536000, immutable' : 'no-cache');
@@ -165,10 +178,19 @@ export async function buildApp(deps: AppDeps): Promise<BuiltApp> {
   };
 
   // Order matters: CSRF check, then cookie parsing, then session loading + authorization.
+  const { basePath } = config;
   registerSecurity(app, config);
   await app.register(fastifyCookie);
-  registerAuth(app, { repos, sessionTtlMs, now });
-  registerErrorHandling(app, webDistDir);
+  registerAuth(app, { repos, sessionTtlMs, now, basePath });
+  const indexHtml = loadIndexHtml(webDistDir, basePath);
+  registerErrorHandling(app, indexHtml, basePath);
+  if (basePath) app.get(basePath, async (_request, reply) => reply.redirect(`${basePath}/`));
+  // The app's root page (a directory request, which the static plugin would refuse with 403).
+  if (indexHtml) {
+    app.get(`${basePath}/`, async (_request, reply) =>
+      reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(indexHtml),
+    );
+  }
   await app.register(
     async (api) => {
       registerHealthRoutes(api, ctx);
@@ -182,9 +204,9 @@ export async function buildApp(deps: AppDeps): Promise<BuiltApp> {
       registerBackupRoutes(api, ctx);
       registerSettingsRoutes(api, ctx);
     },
-    { prefix: '/api' },
+    { prefix: `${basePath}/api` },
   );
-  registerFeedRoutes(app, ctx);
-  await registerStatic(app, webDistDir);
+  await app.register(async (scope) => registerFeedRoutes(scope, ctx), { prefix: basePath });
+  await registerStatic(app, webDistDir, basePath);
   return { app, scheduler, repos };
 }
